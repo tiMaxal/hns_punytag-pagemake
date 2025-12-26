@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import pandas as pd
 import idna
-import regex as re
+import re
 import os
 from datetime import datetime
 import math
