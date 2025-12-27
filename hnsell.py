@@ -242,10 +242,12 @@ class HNSellApp:
             
             if 'extra.domain' in headers or 'extra.action' in headers:
                 return 'nb-tr'
+            elif 'domain' in headers_lower and 'for_sale' in headers_lower:
+                return 'ss-tld'
+            elif 'domain' in headers_lower and len(headers) >= 8:
+                return 'ss-tr'
             elif 'name' in headers_lower and 'tags' in headers_lower:
                 return 'nb-tld'
-            elif 'domain' in headers_lower and 'for_sale' in headers_lower:
-                return 'ss'
             elif 'time' in headers_lower and 'txhash' in headers_lower and 'domains' in headers_lower:
                 return 'bob-tr'
             elif 'domains' in headers_lower and len(headers) == 1:
@@ -401,6 +403,150 @@ OUTPUT:
         
         df.to_csv(output_path, index=False)
         
+    def process_ss_tld(self, filepath, output_path):
+        try:
+            df = pd.read_csv(filepath, quoting=1, escapechar='\\')
+        except:
+            df = pd.read_csv(filepath, on_bad_lines='skip')
+        
+        domain_col = None
+        for col in df.columns:
+            if col.lower() == 'domain':
+                domain_col = col
+                break
+        
+        if not domain_col:
+            raise ValueError("No 'domain' column found in Shakestation CSV")
+        
+        punycode_info = df[domain_col].apply(lambda x: self.punycode_convert_validate(x) if isinstance(x, str) else ('', ''))
+        
+        df['unicode'] = [re.sub(r'(?:\\x[\da-fA-F]{2})+|\\u(?:[\da-fA-F]{4})+', '', info[0]) if info[0] and info[0] != df.at[i, domain_col] else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_INVALID'] = [1 if (info[0] != df.at[i, 'unicode']) or (info[0] and df.at[i, 'unicode'] == df.at[i, domain_col]) else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_IDNA'] = [1 if info[1] == 'PUNY_IDNA' else '' for info in punycode_info]
+        df['PUNY_ALT'] = [1 if info[1] == 'PUNY_ALT' and info[0] else '' for info in punycode_info]
+        df.loc[df['unicode'] == '', 'PUNY_ALT'] = ''
+        
+        tags_columns = ['PUNY_IDNA', 'PUNY_ALT', 'PUNY_INVALID']
+        df['tags'] = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+        df.drop(columns=tags_columns, inplace=True)
+        
+        col_order = [domain_col, 'unicode', 'tags'] + [col for col in df.columns if col not in [domain_col, 'unicode', 'tags']]
+        df = df[col_order]
+        
+        df.to_csv(output_path, index=False)
+        
+    def process_ss_tr(self, filepath, output_path):
+        try:
+            df = pd.read_csv(filepath, quoting=1, escapechar='\\')
+        except:
+            df = pd.read_csv(filepath, on_bad_lines='skip')
+        
+        domain_col = None
+        for col in df.columns:
+            if col.lower() == 'domain':
+                domain_col = col
+                break
+        
+        if not domain_col:
+            raise ValueError("No 'domain' column found in Shakestation TR CSV")
+        
+        punycode_info = df[domain_col].apply(lambda x: self.punycode_convert_validate(x) if isinstance(x, str) else ('', ''))
+        
+        df['unicode'] = [re.sub(r'(?:\\x[\da-fA-F]{2})+|\\u(?:[\da-fA-F]{4})+', '', info[0]) if info[0] and info[0] != df.at[i, domain_col] else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_INVALID'] = [1 if (info[0] != df.at[i, 'unicode']) or (info[0] and df.at[i, 'unicode'] == df.at[i, domain_col]) else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_IDNA'] = [1 if info[1] == 'PUNY_IDNA' else '' for info in punycode_info]
+        df['PUNY_ALT'] = [1 if info[1] == 'PUNY_ALT' and info[0] else '' for info in punycode_info]
+        df.loc[df['unicode'] == '', 'PUNY_ALT'] = ''
+        
+        tags_columns = ['PUNY_IDNA', 'PUNY_ALT', 'PUNY_INVALID']
+        df['tags'] = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+        df.drop(columns=tags_columns, inplace=True)
+        
+        col_order = [domain_col, 'unicode', 'tags'] + [col for col in df.columns if col not in [domain_col, 'unicode', 'tags']]
+        df = df[col_order]
+        
+        df.to_csv(output_path, index=False)
+        
+    def process_nb_tld(self, filepath, output_path):
+        df = pd.read_csv(filepath)
+        
+        name_col = None
+        for col in df.columns:
+            if col.lower() == 'name':
+                name_col = col
+                break
+        
+        if not name_col:
+            raise ValueError("No 'name' column found in Namebase TLD CSV")
+        
+        if 'unicode' not in df.columns:
+            punycode_info = df[name_col].apply(lambda x: self.punycode_convert_validate(x) if isinstance(x, str) else ('', ''))
+            df['unicode'] = [re.sub(r'(?:\\x[\da-fA-F]{2})+|\\u(?:[\da-fA-F]{4})+', '', info[0]) if info[0] and info[0] != df.at[i, name_col] else '' for i, info in enumerate(punycode_info)]
+            
+            df['PUNY_INVALID'] = [1 if (info[0] != df.at[i, 'unicode']) or (info[0] and df.at[i, 'unicode'] == df.at[i, name_col]) else '' for i, info in enumerate(punycode_info)]
+            df['PUNY_IDNA'] = [1 if info[1] == 'PUNY_IDNA' else '' for info in punycode_info]
+            df['PUNY_ALT'] = [1 if info[1] == 'PUNY_ALT' and info[0] else '' for info in punycode_info]
+            df.loc[df['unicode'] == '', 'PUNY_ALT'] = ''
+            
+            tags_columns = ['PUNY_IDNA', 'PUNY_ALT', 'PUNY_INVALID']
+            if 'tags' in df.columns:
+                existing_tags = df['tags'].fillna('')
+                new_tags = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+                df['tags'] = df.apply(lambda row: ','.join(filter(None, [str(row['tags']), new_tags[row.name]])), axis=1)
+            else:
+                df['tags'] = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+            df.drop(columns=tags_columns, inplace=True)
+            
+            col_order = [name_col, 'unicode', 'tags'] + [col for col in df.columns if col not in [name_col, 'unicode', 'tags']]
+            df = df[col_order]
+        
+        df.to_csv(output_path, index=False)
+        
+    def process_bob_tld(self, filepath, output_path):
+        df = pd.read_csv(filepath)
+        
+        if 'domains' not in df.columns:
+            raise ValueError("No 'domains' column found in Bob TLD CSV")
+        
+        punycode_info = df['domains'].apply(lambda x: self.punycode_convert_validate(x) if isinstance(x, str) else ('', ''))
+        
+        df['unicode'] = [re.sub(r'(?:\\x[\da-fA-F]{2})+|\\u(?:[\da-fA-F]{4})+', '', info[0]) if info[0] and info[0] != df.at[i, 'domains'] else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_INVALID'] = [1 if (info[0] != df.at[i, 'unicode']) or (info[0] and df.at[i, 'unicode'] == df.at[i, 'domains']) else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_IDNA'] = [1 if info[1] == 'PUNY_IDNA' else '' for info in punycode_info]
+        df['PUNY_ALT'] = [1 if info[1] == 'PUNY_ALT' and info[0] else '' for info in punycode_info]
+        df.loc[df['unicode'] == '', 'PUNY_ALT'] = ''
+        
+        tags_columns = ['PUNY_IDNA', 'PUNY_ALT', 'PUNY_INVALID']
+        df['tags'] = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+        df.drop(columns=tags_columns, inplace=True)
+        df = df[['domains', 'unicode', 'tags']]
+        
+        df.to_csv(output_path, index=False)
+        
+    def process_fw(self, filepath, output_path):
+        df = pd.read_csv(filepath)
+        
+        domain_col = df.columns[0] if len(df.columns) > 0 else None
+        if not domain_col:
+            raise ValueError("No columns found in Firewallet CSV")
+        
+        punycode_info = df[domain_col].apply(lambda x: self.punycode_convert_validate(x) if isinstance(x, str) else ('', ''))
+        
+        df['unicode'] = [re.sub(r'(?:\\x[\da-fA-F]{2})+|\\u(?:[\da-fA-F]{4})+', '', info[0]) if info[0] and info[0] != df.at[i, domain_col] else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_INVALID'] = [1 if (info[0] != df.at[i, 'unicode']) or (info[0] and df.at[i, 'unicode'] == df.at[i, domain_col]) else '' for i, info in enumerate(punycode_info)]
+        df['PUNY_IDNA'] = [1 if info[1] == 'PUNY_IDNA' else '' for info in punycode_info]
+        df['PUNY_ALT'] = [1 if info[1] == 'PUNY_ALT' and info[0] else '' for info in punycode_info]
+        df.loc[df['unicode'] == '', 'PUNY_ALT'] = ''
+        
+        tags_columns = ['PUNY_IDNA', 'PUNY_ALT', 'PUNY_INVALID']
+        df['tags'] = df.apply(lambda row: ','.join(tag for tag in tags_columns if row[tag] == 1), axis=1)
+        df.drop(columns=tags_columns, inplace=True)
+        
+        col_order = [domain_col, 'unicode', 'tags'] + [col for col in df.columns if col not in [domain_col, 'unicode', 'tags']]
+        df = df[col_order]
+        
+        df.to_csv(output_path, index=False)
+        
     def process_punytag(self):
         selected_indices = self.file_listbox.curselection()
         if not selected_indices:
@@ -409,6 +555,7 @@ OUTPUT:
             
         date_suffix = datetime.now().strftime("%Y%m%d")
         processed_count = 0
+        skipped_count = 0
         
         for idx in selected_indices:
             file_info = self.file_data[idx]
@@ -419,13 +566,24 @@ OUTPUT:
             file_name = os.path.basename(filepath)
             file_base, file_ext = os.path.splitext(file_name)
             
+            # Skip if already marked as original
             if '_orig' in file_base:
+                skipped_count += 1
+                continue
+            
+            # Check if this file was already processed (has date stamp at end)
+            # Pattern: filename_YYYYMMDD.csv or filename.date_YYYYMMDD.csv
+            import re as regex_module
+            if regex_module.search(r'_\d{8}$', file_base):
+                skipped_count += 1
                 continue
                 
             output_name = f"{file_base}_{date_suffix}{file_ext}"
             output_path = os.path.join(file_dir, output_name)
             
+            # Skip if output already exists
             if os.path.exists(output_path):
+                skipped_count += 1
                 continue
                 
             try:
@@ -433,6 +591,16 @@ OUTPUT:
                     self.process_bob_tr(filepath, output_path)
                 elif source_type == 'nb-tr':
                     self.process_nb_tr(filepath, output_path)
+                elif source_type == 'ss-tld':
+                    self.process_ss_tld(filepath, output_path)
+                elif source_type == 'ss-tr':
+                    self.process_ss_tr(filepath, output_path)
+                elif source_type == 'nb-tld':
+                    self.process_nb_tld(filepath, output_path)
+                elif source_type == 'bob-tld':
+                    self.process_bob_tld(filepath, output_path)
+                elif source_type == 'fw':
+                    self.process_fw(filepath, output_path)
                 else:
                     messagebox.showinfo("Info", f"Processing for {source_type} not yet implemented")
                     continue
@@ -452,7 +620,10 @@ OUTPUT:
             except Exception as e:
                 messagebox.showerror("Error", f"Error processing {file_name}:\n{str(e)}")
                 
-        messagebox.showinfo("Complete", f"Processed {processed_count} file(s)")
+        result_msg = f"Processed {processed_count} file(s)"
+        if skipped_count > 0:
+            result_msg += f"\nSkipped {skipped_count} file(s) (already processed or marked as original)"
+        messagebox.showinfo("Complete", result_msg)
         
     def process_puny2uni(self):
         selected_indices = self.puny2uni_listbox.curselection()
@@ -521,7 +692,7 @@ OUTPUT:
                 df = pd.read_csv(filepath)
                 source_type = self.detect_csv_source(filepath)
                 
-                if source_type == 'ss':
+                if source_type == 'ss-tld' or source_type == 'ss-tr':
                     df = df[df['for_sale'] == True]
                     for _, row in df.iterrows():
                         domain = row['domain']

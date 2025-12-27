@@ -2,6 +2,8 @@
 
 A comprehensive GUI application for managing Handshake (HNS) domain CSV exports from multiple wallet sources.
 
+*Voding [vibe-coding] by copilot[20251227]timaxal*
+
 ## Features
 
 ### 3-Tab Interface
